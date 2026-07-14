@@ -158,6 +158,23 @@ body{background:var(--bg);color:var(--t1)}
 }
 .tab.active .tab-pip{opacity:1}
 
+/* ─── COURSE SELECTOR ──────────────────────────────────────── */
+#course-selector{
+  display:flex;gap:8px;padding:8px 16px;overflow-x:auto;
+  background:var(--bg);border-bottom:1px solid var(--border);
+  scrollbar-width:none;flex-shrink:0;
+}
+#course-selector::-webkit-scrollbar{display:none}
+.course-tab{
+  flex-shrink:0;padding:6px 14px;border-radius:20px;font-size:13px;font-weight:600;
+  border:1.5px solid var(--border);color:var(--t2);background:transparent;
+  cursor:pointer;transition:all .2s;white-space:nowrap;
+}
+.course-tab.active{
+  background:var(--acc);color:#fff;border-color:var(--acc);
+  box-shadow:0 0 12px color-mix(in srgb,var(--acc) 40%,transparent);
+}
+
 /* ─── CARDS ─────────────────────────────────────────────────── */
 .card{
   background:var(--card);
@@ -418,6 +435,9 @@ body{background:var(--bg);color:var(--t1)}
     </div>
   </div>
 
+  <!-- COURSE SELECTOR (only shows when 2+ courses) -->
+  <div id="course-selector" style="display:none"></div>
+
   <!-- SCREENS -->
   <div id="screens">
 
@@ -577,7 +597,9 @@ body{background:var(--bg);color:var(--t1)}
 
 <script>
 // ─── STATE ─────────────────────────────────────────────────────
-var _data = null;
+var _data = null;           // currently selected course data
+var _allCourses = [];       // all courses from Gist
+var _selectedCourseId = null;
 var _filter = 'all';
 var _refreshTimer = null;
 var _isOnline = navigator.onLine;
@@ -683,6 +705,46 @@ function showScreen(name, btn) {
   _activeScreen = name;
 }
 
+// ─── MULTI-COURSE SUPPORT ───────────────────────────────────────
+function applyGistData(raw) {
+  if(raw && Array.isArray(raw.courses)) {
+    // New multi-course format
+    _allCourses = raw.courses;
+    // Pick the active course by ID, or the first one
+    var active = _allCourses.find(function(c){ return c.id === (_selectedCourseId !== null ? _selectedCourseId : raw.activeCourseId); });
+    if(!active) active = _allCourses[0];
+    _selectedCourseId = active ? active.id : null;
+    _data = active || null;
+  } else {
+    // Legacy single-course format
+    _allCourses = raw ? [raw] : [];
+    _data = raw || null;
+    _selectedCourseId = null;
+  }
+}
+
+function selectCourse(id) {
+  _selectedCourseId = id;
+  var course = _allCourses.find(function(c){ return c.id === id; });
+  if(course) { _data = course; _confettiShown = false; renderAll(); }
+  renderCourseSelector();
+}
+
+function renderCourseSelector() {
+  var wrap = document.getElementById('course-selector');
+  if(!wrap) return;
+  if(_allCourses.length <= 1) { wrap.style.display = 'none'; return; }
+  wrap.style.display = 'flex';
+  wrap.innerHTML = '';
+  _allCourses.forEach(function(c) {
+    var btn = document.createElement('button');
+    btn.className = 'course-tab' + (c.id === _selectedCourseId ? ' active' : '');
+    btn.textContent = c.course || ('Course ' + c.id);
+    btn.onclick = function(){ selectCourse(c.id); };
+    wrap.appendChild(btn);
+  });
+}
+
 // ─── DATA FETCH ─────────────────────────────────────────────────
 function refreshData() {
   var gist = localStorage.getItem('ccs-gist') || '';
@@ -704,7 +766,7 @@ function refreshData() {
       return r.json();
     })
     .then(function(data) {
-      _data = data;
+      applyGistData(data);
       localStorage.setItem('ccs-cached', JSON.stringify(data));
       localStorage.setItem('ccs-cache-time', Date.now().toString());
       btn.classList.remove('spinning');
@@ -714,7 +776,7 @@ function refreshData() {
       btn.classList.remove('spinning');
       var cached = localStorage.getItem('ccs-cached');
       if (cached) {
-        try { _data = JSON.parse(cached); renderAll(); } catch(e) {}
+        try { applyGistData(JSON.parse(cached)); renderAll(); } catch(e) {}
       } else {
         hideSkeleton();
         renderEmpty();
@@ -744,6 +806,7 @@ function renderAll() {
   if (!_data) return;
   hideSkeleton();
   updateHeader();
+  renderCourseSelector();
   renderDashboard();
   renderLectures();
 }

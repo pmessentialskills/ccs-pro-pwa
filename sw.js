@@ -1,4 +1,4 @@
-const CACHE = 'ccs-pro-v1';
+const CACHE = 'ccs-pro-v2';
 const SHELL = ['./index.html', './manifest.json'];
 
 self.addEventListener('install', e => {

@@ -160,20 +160,19 @@ body{background:var(--bg);color:var(--t1)}
 
 /* ─── COURSE SELECTOR ──────────────────────────────────────── */
 #course-selector{
-  display:flex;gap:8px;padding:8px 16px;overflow-x:auto;
+  padding:8px 16px;
   background:var(--bg);border-bottom:1px solid var(--border);
-  scrollbar-width:none;flex-shrink:0;
+  flex-shrink:0;
 }
-#course-selector::-webkit-scrollbar{display:none}
-.course-tab{
-  flex-shrink:0;padding:6px 14px;border-radius:20px;font-size:13px;font-weight:600;
-  border:1.5px solid var(--border);color:var(--t2);background:transparent;
-  cursor:pointer;transition:all .2s;white-space:nowrap;
+.course-dropdown{
+  width:100%;background:var(--card);border:1.5px solid var(--acc);
+  color:var(--t1);border-radius:10px;padding:10px 14px;font-size:14px;font-weight:600;
+  outline:none;-webkit-appearance:none;appearance:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23A855F7' stroke-width='2.5'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 14px center;padding-right:36px;
+  cursor:pointer;
 }
-.course-tab.active{
-  background:var(--acc);color:#fff;border-color:var(--acc);
-  box-shadow:0 0 12px color-mix(in srgb,var(--acc) 40%,transparent);
-}
+.course-dropdown option{background:var(--bg);color:var(--t1)}
 
 /* ─── CARDS ─────────────────────────────────────────────────── */
 .card{
@@ -226,7 +225,9 @@ body{background:var(--bg);color:var(--t1)}
   background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 12px;
   display:flex;flex-direction:column;gap:8px;
   position:relative;overflow:hidden;transition:border-color .2s;
+  cursor:pointer;
 }
+.pipe-card:active{opacity:.8}
 .pipe-card.glow{border-color:var(--pipe-color,var(--acc));box-shadow:0 0 16px -4px var(--pipe-color,var(--acc))}
 .pipe-icon{font-size:20px}
 .pipe-label{font-size:11px;color:var(--t2);font-weight:600;text-transform:uppercase;letter-spacing:.5px}
@@ -285,7 +286,7 @@ body{background:var(--bg);color:var(--t1)}
   padding:10px 12px;margin-bottom:6px;transition:border-color .15s;
 }
 .lec-row:active{border-color:var(--acc)}
-.lec-num{font-size:11px;color:var(--t3);min-width:28px;font-weight:600}
+.lec-num{font-size:11px;color:var(--t2);min-width:28px;font-weight:600}
 .lec-name{flex:1;font-size:13px;font-weight:500;line-height:1.3}
 .lec-dots{display:flex;gap:4px;flex-shrink:0}
 .dot{
@@ -725,7 +726,7 @@ function applyGistData(raw) {
 
 function selectCourse(id) {
   _selectedCourseId = id;
-  var course = _allCourses.find(function(c){ return c.id === id; });
+  var course = _allCourses.find(function(c){ return String(c.id) === String(id); });
   if(course) { _data = course; _confettiShown = false; renderAll(); }
   renderCourseSelector();
 }
@@ -734,15 +735,19 @@ function renderCourseSelector() {
   var wrap = document.getElementById('course-selector');
   if(!wrap) return;
   if(_allCourses.length <= 1) { wrap.style.display = 'none'; return; }
-  wrap.style.display = 'flex';
-  wrap.innerHTML = '';
+  wrap.style.display = 'block';
+  var sel = document.createElement('select');
+  sel.className = 'course-dropdown';
   _allCourses.forEach(function(c) {
-    var btn = document.createElement('button');
-    btn.className = 'course-tab' + (c.id === _selectedCourseId ? ' active' : '');
-    btn.textContent = c.course || ('Course ' + c.id);
-    btn.onclick = function(){ selectCourse(c.id); };
-    wrap.appendChild(btn);
+    var opt = document.createElement('option');
+    opt.value = String(c.id);
+    opt.textContent = c.course || ('Course ' + c.id);
+    opt.selected = (String(c.id) === String(_selectedCourseId));
+    sel.appendChild(opt);
   });
+  sel.onchange = function(){ selectCourse(this.value); };
+  wrap.innerHTML = '';
+  wrap.appendChild(sel);
 }
 
 // ─── DATA FETCH ─────────────────────────────────────────────────
@@ -852,6 +857,13 @@ function renderDashboard() {
     var card = document.createElement('div');
     card.className = 'pipe-card' + (s.pct === 100 ? ' glow' : '');
     card.style.setProperty('--pipe-color', p.color);
+    (function(key){
+      card.onclick = function(){
+        showScreen('lectures', document.querySelector('[data-screen="lectures"]'));
+        var chip = document.querySelector('[data-filter="'+key+'"]');
+        if(chip) setFilter(key, chip);
+      };
+    })(p.key);
     card.innerHTML = '<div class="pipe-icon">'+p.icon+'</div>' +
       '<div class="pipe-label">'+p.label+'</div>' +
       '<div class="pipe-nums" id="pc-'+p.key+'">0</div>' +
@@ -869,9 +881,31 @@ function renderDashboard() {
   var sw = document.getElementById('sections-wrap');
   sw.innerHTML = '<div style="font-size:12px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.8px;margin:16px 0 8px">Sections</div>';
   var sections = d.sections || [];
+  var stDotKeys2 = ['script','slides','vo','video','yt'];
+  var stDotLabels2 = ['Script','Slides','Voice','Video','YT'];
   sections.forEach(function(sec) {
     var badge_bg = sec.pct === 100 ? '#22C55E' : sec.pct >= 50 ? '#A855F7' : '#52525B';
     var badge_c = '#fff';
+    // Build lecture rows for this section
+    var secLectures = (d.lectures || []).filter(function(l){ return String(l.sectionId) === String(sec.id); });
+    var detailHtml = '';
+    if(secLectures.length) {
+      secLectures.forEach(function(lec) {
+        var dots = stDotKeys2.map(function(k,i) {
+          var v = lec.st ? lec.st[k] : null;
+          if(v === null || v === undefined) return '<div class="dot skip" title="'+stDotLabels2[i]+': N/A" style="opacity:.25"></div>';
+          return '<div class="dot'+(v==='done'?' done':'')+'" title="'+stDotLabels2[i]+': '+(v||'pending')+'"></div>';
+        }).join('');
+        detailHtml +=
+          '<div class="lec-row">' +
+            '<div class="lec-num">'+lec.num+'</div>' +
+            '<div class="lec-name">'+lec.name+'</div>' +
+            '<div class="lec-dots">'+dots+'</div>' +
+          '</div>';
+      });
+    } else {
+      detailHtml = '<div style="font-size:12px;color:var(--t3);padding:8px 0">No lectures found.</div>';
+    }
     var div = document.createElement('div');
     div.className = 'section-card';
     div.innerHTML =
@@ -884,11 +918,10 @@ function renderDashboard() {
       '</div>' +
       '<div class="section-bar-row">' +
         '<div class="section-bar"><div class="section-bar-fill" data-pct="'+sec.pct+'"></div></div>' +
-        '<div class="section-lec-count">'+sec.lectures+' lectures</div>' +
+        '<div class="section-lec-count">'+sec.lectures+' lectures · tap to expand</div>' +
       '</div>' +
-      '<div class="section-detail">No per-lecture detail in this data snapshot.</div>';
+      '<div class="section-detail">'+detailHtml+'</div>';
     sw.appendChild(div);
-    // Animate bar after a short delay
     setTimeout(function(el, p) {
       if (el) el.style.width = p + '%';
     }.bind(null, div.querySelector('.section-bar-fill'), sec.pct), 200);
@@ -901,53 +934,60 @@ function renderLectures() {
   var lectures = (d && d.lectures) ? d.lectures : [];
 
   if (!lectures.length) {
-    var sections = (d && d.sections) ? d.sections : [];
-    if (!sections.length) {
-      list.innerHTML = '<div class="empty-state"><div class="empty-icon">📚</div><div class="empty-msg">No lecture data available in this snapshot.</div></div>';
-      return;
-    }
-    // Render section summary view
-    list.innerHTML = '';
-    sections.forEach(function(sec) {
-      var grp = document.createElement('div');
-      grp.className = 'lec-section-group';
-      grp.innerHTML = '<div class="lec-section-label">'+sec.name+' ('+sec.lectures+' lectures)</div>' +
-        '<div class="lec-row">' +
-          '<div class="lec-name" style="color:var(--t2)">'+sec.pct+'% complete</div>' +
-          '<div class="lec-dots"></div>' +
-        '</div>';
-      list.appendChild(grp);
-    });
+    list.innerHTML = '<div class="empty-state"><div class="empty-icon">📚</div><div class="empty-msg">No lecture data available.</div></div>';
     return;
   }
 
-  // Full lecture list
+  // Build section name map
+  var secNameMap = {};
+  if(d.sections) {
+    d.sections.forEach(function(s){ secNameMap[String(s.id)] = s.name; });
+  }
+
+  // Field mapping: filter chip value → lec.st key
+  var FILTER_KEY = {scripts:'script', slides:'slides', voice:'vo', video:'video', youtube:'yt'};
+
+  // Filter: for non-all filters, show only lectures where that stage is pending
   var filtered = lectures.filter(function(lec) {
     if (_filter === 'all') return true;
-    return lec[_filter] !== undefined;
+    var stKey = FILTER_KEY[_filter];
+    if (!stKey || !lec.st) return false;
+    var v = lec.st[stKey];
+    return v !== null && v !== undefined && v !== 'done';
   });
 
-  // Group by section
+  if (!filtered.length) {
+    var filterLabel = _filter === 'all' ? 'lectures' : _filter;
+    list.innerHTML = '<div class="empty-state"><div class="empty-icon">✅</div><div class="empty-msg">All '+filterLabel+' are complete!</div></div>';
+    return;
+  }
+
+  // Group by sectionId preserving order
   var groups = {};
+  var groupOrder = [];
   filtered.forEach(function(lec) {
-    var g = lec.section || 'Other';
-    if (!groups[g]) groups[g] = [];
-    groups[g].push(lec);
+    var secId = (lec.sectionId !== undefined && lec.sectionId !== null) ? String(lec.sectionId) : '__none__';
+    if (!groups[secId]) { groups[secId] = []; groupOrder.push(secId); }
+    groups[secId].push(lec);
   });
+
+  var stDotKeys = ['script','slides','vo','video','yt'];
+  var stDotLabels = ['Script','Slides','Voice','Video','YT'];
 
   list.innerHTML = '';
-  Object.keys(groups).forEach(function(sec) {
+  groupOrder.forEach(function(secId) {
+    var lecs = groups[secId];
+    var secName = secId === '__none__' ? 'Others' : (secNameMap[secId] || 'Others');
     var grp = document.createElement('div');
     grp.className = 'lec-section-group';
-    grp.innerHTML = '<div class="lec-section-label">'+sec+'</div>';
-    groups[sec].forEach(function(lec) {
+    grp.innerHTML = '<div class="lec-section-label">'+secName+'</div>';
+    lecs.forEach(function(lec) {
       var row = document.createElement('div');
       row.className = 'lec-row';
-      var keys = ['scripts','slides','voice','video','youtube'];
-      var dots = keys.map(function(k) {
-        var v = lec[k];
-        var cls = v === 'done' ? 'done' : v === 'wip' ? 'wip' : 'skip';
-        return '<div class="dot '+cls+'" title="'+k+'"></div>';
+      var dots = stDotKeys.map(function(k,i) {
+        var v = lec.st ? lec.st[k] : null;
+        if(v === null || v === undefined) return '<div class="dot skip" title="'+stDotLabels[i]+': N/A" style="opacity:.25"></div>';
+        return '<div class="dot'+(v==='done'?' done':'')+'" title="'+stDotLabels[i]+': '+(v||'pending')+'"></div>';
       }).join('');
       row.innerHTML =
         '<div class="lec-num">'+lec.num+'</div>' +

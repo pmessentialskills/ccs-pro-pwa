@@ -290,12 +290,13 @@ body{background:var(--bg);color:var(--t1)}
 .lec-name{flex:1;font-size:13px;font-weight:500;line-height:1.3}
 .lec-dots{display:flex;gap:4px;flex-shrink:0}
 .dot{
-  width:8px;height:8px;border-radius:50%;
-  background:var(--border);transition:background .3s;
+  width:8px;height:8px;border-radius:50%;flex-shrink:0;
+  background:transparent;border:1.5px solid var(--t3);
+  transition:background .3s,border-color .3s;
 }
-.dot.done{background:var(--green)}
-.dot.wip{background:var(--yellow)}
-.dot.skip{background:var(--border)}
+.dot.done{background:var(--green);border-color:var(--green)}
+.dot.wip{background:var(--yellow);border-color:var(--yellow)}
+.dot.na{background:transparent;border-color:transparent}
 
 /* ─── SETTINGS SCREEN ───────────────────────────────────────── */
 .settings-section{margin-bottom:24px}
@@ -893,7 +894,7 @@ function renderDashboard() {
       secLectures.forEach(function(lec) {
         var dots = stDotKeys2.map(function(k,i) {
           var v = lec.st ? lec.st[k] : null;
-          if(v === null || v === undefined) return '<div class="dot skip" title="'+stDotLabels2[i]+': N/A" style="opacity:.25"></div>';
+          if(v === null || v === undefined) return '<div class="dot na" title="'+stDotLabels2[i]+': N/A"></div>';
           return '<div class="dot'+(v==='done'?' done':'')+'" title="'+stDotLabels2[i]+': '+(v||'pending')+'"></div>';
         }).join('');
         detailHtml +=
@@ -944,35 +945,19 @@ function renderLectures() {
     d.sections.forEach(function(s){ secNameMap[String(s.id)] = s.name; });
   }
 
-  // Field mapping: filter chip value → lec.st key
+  // Filter → lec.st key mapping
   var FILTER_KEY = {scripts:'script', slides:'slides', voice:'vo', video:'video', youtube:'yt'};
+  var stDotKeys   = ['script','slides','vo','video','yt'];
+  var stDotLabels = ['Script','Slides','Voice','Video','YT'];
 
-  // Filter: for non-all filters, show only lectures where that stage is pending
-  var filtered = lectures.filter(function(lec) {
-    if (_filter === 'all') return true;
-    var stKey = FILTER_KEY[_filter];
-    if (!stKey || !lec.st) return false;
-    var v = lec.st[stKey];
-    return v !== null && v !== undefined && v !== 'done';
-  });
-
-  if (!filtered.length) {
-    var filterLabel = _filter === 'all' ? 'lectures' : _filter;
-    list.innerHTML = '<div class="empty-state"><div class="empty-icon">✅</div><div class="empty-msg">All '+filterLabel+' are complete!</div></div>';
-    return;
-  }
-
-  // Group by sectionId preserving order
+  // Always show ALL lectures — group by sectionId preserving order
   var groups = {};
   var groupOrder = [];
-  filtered.forEach(function(lec) {
+  lectures.forEach(function(lec) {
     var secId = (lec.sectionId !== undefined && lec.sectionId !== null) ? String(lec.sectionId) : '__none__';
     if (!groups[secId]) { groups[secId] = []; groupOrder.push(secId); }
     groups[secId].push(lec);
   });
-
-  var stDotKeys = ['script','slides','vo','video','yt'];
-  var stDotLabels = ['Script','Slides','Voice','Video','YT'];
 
   list.innerHTML = '';
   groupOrder.forEach(function(secId) {
@@ -984,15 +969,30 @@ function renderLectures() {
     lecs.forEach(function(lec) {
       var row = document.createElement('div');
       row.className = 'lec-row';
-      var dots = stDotKeys.map(function(k,i) {
-        var v = lec.st ? lec.st[k] : null;
-        if(v === null || v === undefined) return '<div class="dot skip" title="'+stDotLabels[i]+': N/A" style="opacity:.25"></div>';
-        return '<div class="dot'+(v==='done'?' done':'')+'" title="'+stDotLabels[i]+': '+(v||'pending')+'"></div>';
-      }).join('');
+      var dotsHtml;
+      if (_filter === 'all') {
+        // Show all 5 dots
+        dotsHtml = stDotKeys.map(function(k,i) {
+          var v = lec.st ? lec.st[k] : null;
+          if(v === null || v === undefined) return '<div class="dot na" title="'+stDotLabels[i]+': N/A"></div>';
+          return '<div class="dot'+(v==='done'?' done':'')+'" title="'+stDotLabels[i]+': '+(v||'pending')+'"></div>';
+        }).join('');
+      } else {
+        // Show single dot + text for the selected stage
+        var stKey = FILTER_KEY[_filter];
+        var v = (stKey && lec.st) ? lec.st[stKey] : null;
+        var isNA = (v === null || v === undefined);
+        var isDone = (v === 'done');
+        var dotCls = isNA ? 'dot na' : (isDone ? 'dot done' : 'dot');
+        var statusTxt = isNA ? 'N/A' : (isDone ? 'Done' : 'Pending');
+        var txtColor = isDone ? 'var(--green)' : 'var(--t3)';
+        dotsHtml = '<div class="'+dotCls+'" style="width:10px;height:10px"></div>' +
+                   '<span style="font-size:11px;color:'+txtColor+';margin-left:4px">'+statusTxt+'</span>';
+      }
       row.innerHTML =
         '<div class="lec-num">'+lec.num+'</div>' +
         '<div class="lec-name">'+lec.name+'</div>' +
-        '<div class="lec-dots">'+dots+'</div>';
+        '<div class="lec-dots" style="align-items:center">'+dotsHtml+'</div>';
       grp.appendChild(row);
     });
     list.appendChild(grp);
